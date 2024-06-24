@@ -1,0 +1,104 @@
+clear all;
+
+%mass of whole car
+M = 375e-3;
+%mass of wheel
+m = 40e-3;
+%length of center of mass
+L = 30e-3;
+g = 9.8;
+%radius of wheel
+r = 19.5e-3;
+%Length of car
+Len = 98e-3;
+%Width of car
+Wid = 86e-3;
+%Height of car
+Hei = 39e-3;
+%moment of inertial of wheel
+I = m*r^2;
+%moment of inertial of car(axis of rotation is axle, pitch, Y-axis)
+J =  M*(Wid^2+Hei^2)/12 + M*(Wid/2 - r)^2;
+
+q = J*M+(J+M*L^2)*(2*m+2*I^2/r^2);
+
+A = [0 1 0 0; 0 0 -M*L^2*g/q 0; 0 0 0 1; 0 0 M*L*g*(M+2*m+2*I/r^2)/q 0];
+B = [0 0; (J+M*L^2+M*L*r)*I/(q*r^2) (J+M*L^2+M*L*r)*I/(q*r^2); 0 0; I*(M*L/r+M+2*m+2*L/r^2)/(q*r) I*(M*L/r+M+2*m+2*L/r^2)/(q*r)];
+C = [0 0 1 0];
+D = 0;
+
+n = size(A,1);
+p = size(B,2);
+
+%discretization interval
+Ts = 0.05;
+%continuos to discretization
+sys_d = c2d(ss(A,B,C,D), Ts);
+
+A = sys_d.a;
+B = sys_d.b;
+C = sys_d.c;
+
+%initial state
+x0 = [0 ; 0; 2*pi/180; 0];
+x = x0;
+
+%desired state
+xd = [0; 0; 0; 0];
+
+%initail input
+u0 = [0;0];
+u = u0;
+
+steps = 1000;
+
+%states history
+x_history = zeros(n, steps);
+x_history(:,1) = x;
+
+%input history
+u_history = zeros(p,steps);
+u_history(:,1) = u;
+
+%--------------------weight design--------------%
+%running weight n x n
+Q = [3 0 0 0; 0 3 0 0; 0 0 1 0; 0 0 0 1];
+%end value weight n x n
+S = [3 0 0 0; 0 3 0 0; 0 0 1 0; 0 0 0 1];
+%input weight p x p
+R = [500 0; 0 500];
+
+F = F1_LQR_Gain(A, B, Q, R, S);
+
+for k = 1:steps
+    %calculate system input
+    u = -F*x;
+    %calculate respose
+    x = A*x + B*u;
+    %disturbance
+%     if k == 100
+%         x(1) = x(1) + 0.1;
+%     end
+    %update augmented matrix
+    x_history(:, k+1) = x;
+    u_history(:, k) = u;
+end
+
+subplot(2,1,1);
+hold on;
+for i = 1:n
+    plot(x_history(i,:));
+end
+legend(num2str((1:n)', 'x %d'));
+xlim([1, steps]);
+
+subplot(2,1,2);
+for i = 1:p
+    stairs (u_history(i,:));
+    hold;
+end
+legend(num2str((1:p)', 'u %d'));
+xlim([1, steps]);
+grid on
+
+
